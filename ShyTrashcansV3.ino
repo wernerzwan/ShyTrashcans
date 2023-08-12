@@ -70,9 +70,7 @@ void loop() {
       if (motionDetected) {
         currentState = CLOSING;
         stateStartTime = millis();
-      } else {
-        currentState = OPEN;
-      }
+      } 
       break;
   }
 }
