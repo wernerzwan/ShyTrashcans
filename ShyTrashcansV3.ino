@@ -53,6 +53,7 @@ void loop() {
     if (motionDetected){
               Serial.println("Motion Detected! Closing Again.");
               currentState = CLOSING;
+              bottomReached = false;
     } else{ 
       digitalWrite(LED, HIGH); // LED on
       analogWrite(TrashcanPin, 70);
