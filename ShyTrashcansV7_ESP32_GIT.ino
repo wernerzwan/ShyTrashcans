@@ -197,10 +197,6 @@ void loop() {
     }
 }
 
-
-
-
-
 void receiveMessage() {
   OSCMessage inmsg;
   int size = Udp.parsePacket();
