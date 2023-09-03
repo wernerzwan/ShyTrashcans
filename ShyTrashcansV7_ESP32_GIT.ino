@@ -18,7 +18,7 @@ const int PIRPin = 27; // PIR sensor pin
 bool motionDetected = false;
 
 // Setting Up ESP32 ledc function
-const int freq = 15000;
+const int freq = 18000;
 const int resolution = 8;
 
 // specialSequence Settings
@@ -156,30 +156,24 @@ void loop() {
 
       case CLOSED:
         ledcWrite(trashcan.FChannel, 0);
-        if (motionDetected) {
+        if (specialSequenceTriggered && i == specialTrashcan){
+          trashcan.state = OPENING;
           trashcan.stateStartTime = millis();
-          Serial.println("Motion Detected! Resetting Timer.");
-        }
-          else if (millis() - trashcan.stateStartTime >= trashcan.delayTime) {
-          if (!specialSequenceTriggered) {  // for normal situations 
+        } else if (specialSequenceTriggered && i != specialTrashcan){
+          trashcan.stateStartTime = millis();
+        } else if (motionDetected) { 
+          trashcan.stateStartTime = millis();
+        }  
+        if (millis() - trashcan.stateStartTime >= trashcan.delayTime) {
             trashcan.state = OPENING;
             trashcan.stateStartTime = millis();
-          } else if (specialSequenceTriggered && i == specialTrashcan) {
-            trashcan.state = OPENING;
-            trashcan.stateStartTime = millis();
-          } else {
-            trashcan.state = CLOSED;
-            trashcan.stateStartTime = millis();
-          }
         }
         break;
 
       case OPENING:
-        if (motionDetected & !specialSequenceTriggered) {
-          Serial.println("Motion Detected! Closing Again.");
+        if ((motionDetected && !specialSequenceTriggered) || (specialSequenceTriggered && i != specialTrashcan)) {
           trashcan.state = CLOSING;
         } else {
-          //digitalWrite(LED, HIGH);
           ledcWrite(trashcan.FChannel, 70);
           trashcan.bottomReached = false;
         }
@@ -192,20 +186,17 @@ void loop() {
 
       case OPEN:
         trashcan.bottomReached = false;
-        if (motionDetected & !specialSequenceTriggered) {
+        if (specialSequenceTriggered && i == specialTrashcan) { 
+          if (millis() - trashcan.stateStartTime >= specialDelayTime) {
+          specialSequenceTriggered = false;
+          } } else if (motionDetected || specialSequenceTriggered) {
           trashcan.state = CLOSING;
-          trashcan.stateStartTime = millis();
-        } else if (motionDetected & specialSequenceTriggered) { 
-          if (millis() -  trashcan.stateStartTime >= specialDelayTime){
-            trashcan.state = CLOSING;
-            trashcan.stateStartTime = millis();
-            specialSequenceTriggered = false;
-          }
-        }
+          }       
         break;
     }
     }
 }
+
 
 
 
@@ -223,6 +214,7 @@ void receiveMessage() {
       if (inmsg.isInt(0) && inmsg.getInt(0) == 1) {
         // Set the flag to trigger the special sequence
         specialSequenceTriggered = true;
+
       }  
   }
 }
