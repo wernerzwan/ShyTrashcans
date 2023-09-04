@@ -1,3 +1,5 @@
+// Tried out the Interrupt function. Maybe RISING would have been better. In the main code using different method now. Might revert back to Interrupts if the sensor reading are not update   quick enough.  
+
 int TrashcanPin = 3;
 int LED = 13; // onboard LED pin
 int PIRPin = 5; // PIR sensor pin
