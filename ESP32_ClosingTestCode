@@ -1,7 +1,5 @@
-int HallSensor = 22; // Hall sensor is connected to the D2 pin
+int HallSensor = 22; 
 int TrashcanPin = 13;
-int pinStateCurrent   = LOW; // current state of pin
-int pinStatePrevious  = LOW; // previous state of pin
 bool bottomReached = false;
 
 const int freq = 10000;
