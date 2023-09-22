@@ -1,20 +1,26 @@
 // Packages for OSC
 #include "WiFi.h"
 #include <OSCMessage.h>
+#include <ESPmDNS.h>
+#include <WiFiUdp.h>
+#include <ArduinoOTA.h>
 
 WiFiUDP Udp;  // A UDP instance to let us send and receive packets over UDP
 
 // Network settings
-const char* ssid = "KE25";           // Your network SSID (name)
-const char* pass = "MeltingIce2011"; // Your network password
+const char* ssid = "SSID";           // Your network SSID (name)
+const char* password = "PASSWORD"; // Your network password
 const unsigned int localPort = 8888; // Local port to listen for OSC packets
+
+// Angry setup
+int angryIntensity = 1;
 
 // UDP setup
 const int update_rate = 16;
 unsigned long UDPStartTime;
 
 // Sensor PIN
-const int PIRPin = 13;  // PIR sensor pin
+const int PIRPin = 34;  // PIR sensor pin
 bool motionDetected = false;
 bool previousMotionState = false;
 
@@ -68,9 +74,9 @@ struct Trashcan {
 
 
 Trashcan trashcans[NUM_TRASHCANS] = {
-  { CLOSING, false, 0, 15000, 3100, 16, 17, 100, 1, 2, 4, 60, 80000, 0 },
-  { CLOSING, false, 0, 14000, 400, 21, 19, 100, 3, 4, 18, 150, 51000, 0 },
-  { CLOSING, false, 0, 12000, 500, 23, 22, 100, 5, 6, 12, 100, 34000, 0 },
+  { CLOSING, false, 0, 15000, 1600, 16, 17, 100, 1, 2, 4, 100, 80000, 0 },
+  { CLOSING, false, 0, 14000, 400, 21, 19, 300, 3, 4, 18, 150, 51000, 0 },
+  { CLOSING, false, 0, 12000, 500, 23, 22, 500, 5, 6, 12, 100, 34000, 0 },
   { CLOSING, false, 0, 17000, 1200, 32, 33, 100, 7, 8, 14, 60, 49000, 0 },
   { CLOSING, false, 0, 13000, 2400, 26, 27, 100, 9, 10, 25, 60, 91000, 0 }
 };
@@ -78,12 +84,12 @@ Trashcan trashcans[NUM_TRASHCANS] = {
 void setup() {
 Serial.begin(115200);
   // Setup WiFi
-  WiFi.begin(ssid, pass);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
     delay(500);
   }
-  Serial.println(WiFi.localIP());
   // Setup UDP
   Udp.begin(localPort);
   ledcWrite(LChannel, 0);
@@ -96,10 +102,45 @@ Serial.begin(115200);
     ledcSetup(trashcans[i].RChannel, freq, resolution);
     ledcAttachPin(trashcans[i].trashcanPin, trashcans[i].FChannel);
     ledcAttachPin(trashcans[i].reversePin, trashcans[i].RChannel);
+    trashcans[i].bottomReached = false;
+    trashcans[i].stateStartTime = millis();
+    trashcans[i].bottomReached = (digitalRead(trashcans[i].hallPin) == HIGH);
   }
   ledcSetup(LChannel, freq, resolution);
   ledcAttachPin(lampPin, LChannel);
   pinMode(PIRPin, INPUT);
+
+    ArduinoOTA
+    .onStart([]() {
+      String type;
+      if (ArduinoOTA.getCommand() == U_FLASH)
+        type = "sketch";
+      else // U_SPIFFS
+        type = "filesystem";
+
+      // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+      Serial.println("Start updating " + type);
+    })
+    .onEnd([]() {
+      Serial.println("\nEnd");
+    })
+    .onProgress([](unsigned int progress, unsigned int total) {
+      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    })
+    .onError([](ota_error_t error) {
+      Serial.printf("Error[%u]: ", error);
+      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+      else if (error == OTA_END_ERROR) Serial.println("End Failed");
+    });
+
+  ArduinoOTA.begin();
+
+  Serial.println("Ready");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
 }
 
 void loop() {
@@ -134,13 +175,16 @@ void loop() {
     switch (trashcan.state) {
 
       case CLOSING:
-      
         trashcan.bottomReached = digitalRead(trashcan.hallPin);
-        if (trashcan.bottomReached) {
+        if (!trashcan.bottomReached) {
+          ledcWrite(trashcan.FChannel, 255);
+        } else {
           trashcan.state = REVERSE;
           trashcan.stateStartTime = millis();
-        } else {
-          ledcWrite(trashcan.FChannel, 255);
+        }
+        if (millis() - trashcan.stateStartTime >= 2500) {
+          trashcan.state = REVERSE;
+          trashcan.stateStartTime = millis();
         }
         break;
 
@@ -165,12 +209,14 @@ void loop() {
           trashcan.stateStartTime = millis();
         } else if (specialSequenceTriggered && i != specialTrashcan) {
           trashcan.stateStartTime = millis();
+          trashcan.angryStartTime = millis();
         } else if (motionDetected) {
           trashcan.stateStartTime = millis();
         }
         if (millis() - trashcan.stateStartTime >= trashcan.delayTime) {
           trashcan.state = OPENING;
           trashcan.stateStartTime = millis();
+          trashcan.angryStartTime = millis();
         }
         if (!specialSequenceTriggered && millis() - trashcan.angryStartTime >= trashcan.angryTime) {
           trashcan.state = ANGRY;
@@ -181,6 +227,7 @@ void loop() {
       case OPENING:
         if ((motionDetected && !specialSequenceTriggered) || (specialSequenceTriggered && i != specialTrashcan)) {
           trashcan.state = CLOSING;
+          trashcan.stateStartTime = millis();
         } else {
           ledcWrite(trashcan.FChannel, trashcan.slowSpeed);
           trashcan.bottomReached = false;
@@ -189,6 +236,7 @@ void loop() {
           ledcWrite(trashcan.FChannel, 0);
           trashcan.state = OPEN;
           trashcan.stateStartTime = millis();
+          angryIntensity = 1;
         }
         break;
 
@@ -222,22 +270,22 @@ void loop() {
           }
         } else if (motionDetected || specialSequenceTriggered && i != specialTrashcan) {
           trashcan.state = CLOSING;
+          trashcan.stateStartTime = millis();
         }
-        Serial.print(millis());
-        Serial.print(" ");
-        Serial.println(trashcan.stateStartTime);
         if (millis() - trashcan.stateStartTime >= specialDelayTime) {
           specialSequenceTriggered = false;
           ledcWrite(LChannel, 0);
+        }
         break;
 
       case ANGRY:
       if(specialSequenceTriggered){
-        trashcan.state = CLOSING;
+        trashcan.state = ANGRYCLOSING;
         trashcan.stateStartTime = millis();
         trashcan.angryStartTime = millis();
-      } else if(millis() - trashcan.angryStartTime >= random(1500, 4500)){
+      } else if(millis() - trashcan.angryStartTime >= (random(1500, 4500) * angryIntensity)) {
         trashcan.state = ANGRYCLOSING;
+        trashcan.angryStartTime = millis();
       } else {
         ledcWrite(trashcan.FChannel,255);
       }
@@ -246,31 +294,34 @@ void loop() {
       case ANGRYCLOSING:
       trashcan.bottomReached = digitalRead(trashcan.hallPin);
       if (trashcan.bottomReached) {
-      trashcan.state = CLOSED;
-      trashcan.angryTime = random(30000, 80000);
+      trashcan.state = ANGRYREVERSE;
+      trashcan.angryTime = (random(30000, 80000) / angryIntensity);
       trashcan.angryStartTime = millis();
         } else {
           ledcWrite(trashcan.FChannel, 255);
         }
-        break;
+       if (millis() - trashcan.angryStartTime >= 2500) {
+          trashcan.state = ANGRYREVERSE;
+          angryIntensity = angryIntensity + 0.8;
+          trashcan.stateStartTime = millis();
+        }
+      break;
 
       case ANGRYREVERSE:
         ledcWrite(trashcan.FChannel, 0);
         if (millis() - trashcan.angryStartTime >= 100) {
           ledcWrite(trashcan.RChannel, 100);
         }
-        if (millis() - trashcan.angryStartTime >= trashcan.reverseTime) {
+        if (millis() - trashcan.angryStartTime >= (trashcan.reverseTime )) {
           ledcWrite(trashcan.RChannel, 0);
           trashcan.state = CLOSED;
           trashcan.angryStartTime = millis();
         }
         break;
-
-
     }
   }
 }
-}
+
 
 
 void receiveMessage() {
