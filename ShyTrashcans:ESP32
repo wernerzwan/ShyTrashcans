@@ -8,15 +8,15 @@
 WiFiUDP Udp;  // A UDP instance to let us send and receive packets over UDP
 
 // Network settings
-const char* ssid = "SSID";           // Your network SSID (name)
-const char* password = "PASSWORD"; // Your network password
+const char* ssid = "KE25";           // Your network SSID (name)
+const char* password = "MeltingIce2011"; // Your network password
 const unsigned int localPort = 8888; // Local port to listen for OSC packets
 
 // Angry setup
 int angryIntensity = 1;
 
 // UDP setup
-const int update_rate = 16;
+const int update_rate = 8;
 unsigned long UDPStartTime;
 
 // Sensor PIN
@@ -77,7 +77,7 @@ Trashcan trashcans[NUM_TRASHCANS] = {
   { CLOSING, false, 0, 15000, 1600, 16, 17, 100, 1, 2, 4, 100, 80000, 0 },
   { CLOSING, false, 0, 14000, 400, 21, 19, 300, 3, 4, 18, 150, 51000, 0 },
   { CLOSING, false, 0, 12000, 500, 23, 22, 500, 5, 6, 12, 100, 34000, 0 },
-  { CLOSING, false, 0, 17000, 1200, 32, 33, 100, 7, 8, 14, 60, 49000, 0 },
+  { CLOSING, false, 0, 17000, 1500, 32, 33, 100, 7, 8, 14, 60, 49000, 0 },
   { CLOSING, false, 0, 13000, 2400, 26, 27, 100, 9, 10, 25, 60, 91000, 0 }
 };
 
@@ -145,6 +145,7 @@ Serial.begin(115200);
 
 void loop() {
   //check UDP messages
+  ArduinoOTA.handle();
   if (millis() - UDPStartTime > update_rate) {
     receiveMessage();
     UDPStartTime = millis();
@@ -167,6 +168,9 @@ void loop() {
       motionDetected = false;
     }
   }
+          if(!specialSequenceTriggered) {
+          ledcWrite(LChannel, 0);
+        }
 
   for (int i = 0; i < NUM_TRASHCANS; i++) {
     // picking trashcan i out of max 5
@@ -202,7 +206,6 @@ void loop() {
         break;
 
       case CLOSED:
-      
         ledcWrite(trashcan.FChannel, 0);
         if (specialSequenceTriggered && i == specialTrashcan) {
           trashcan.state = OPENING;
@@ -243,7 +246,7 @@ void loop() {
       case OPEN:
         trashcan.bottomReached = false;
         if (specialSequenceTriggered && i == specialTrashcan) {
-          for (int dutyCycle = 150; dutyCycle <= 255; dutyCycle++) {
+          for (int dutyCycle = 0; dutyCycle <= 255; dutyCycle++) {
             // Calculate the nextMillis when the LED brightness should be updated
             unsigned long nextMillis = previousMillis + fadeInterval;
 
@@ -256,7 +259,7 @@ void loop() {
             }
           }
 
-          for (int dutyCycle = 255; dutyCycle >= 150; dutyCycle--) {
+          for (int dutyCycle = 255; dutyCycle >= 0; dutyCycle--) {
             // Calculate the nextMillis when the LED brightness should be updated
             unsigned long nextMillis = previousMillis + fadeInterval;
 
@@ -336,6 +339,11 @@ void receiveMessage() {
       // Check if the received message is "1"
     Serial.println("Got message!");
     specialSequenceTriggered = true;
+    
+     for (int i = 0; i < NUM_TRASHCANS; i++) {
+      Trashcan& trashcan = trashcans[i];
+      trashcan.stateStartTime = millis();
       }
     }
   }
+}
