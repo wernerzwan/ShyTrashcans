@@ -77,8 +77,8 @@ Trashcan trashcans[NUM_TRASHCANS] = {
   { CLOSING, false, 0, 15000, 1600, 16, 17, 100, 1, 2, 4, 100, 80000, 0 },
   { CLOSING, false, 0, 14000, 400, 21, 19, 300, 3, 4, 18, 150, 51000, 0 },
   { CLOSING, false, 0, 12000, 500, 23, 22, 500, 5, 6, 12, 100, 34000, 0 },
-  { CLOSING, false, 0, 17000, 1500, 32, 33, 100, 7, 8, 14, 60, 49000, 0 },
-  { CLOSING, false, 0, 13000, 2400, 26, 27, 100, 9, 10, 25, 60, 91000, 0 }
+  { CLOSING, false, 0, 17000, 1200, 33, 32, 100, 7, 8, 14, 60, 49000, 0 },
+  { CLOSING, false, 0, 13000, 1900, 26, 27, 100, 9, 10, 25, 60, 91000, 0 }
 };
 
 void setup() {
@@ -86,6 +86,10 @@ Serial.begin(115200);
   // Setup WiFi
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
+  IPAddress ip(192,168,2,21);
+  IPAddress gateway(192,168,2,254);
+  IPAddress subnet(255,255,255,0);
+  WiFi.config(ip, gateway, subnet);
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
     delay(500);
