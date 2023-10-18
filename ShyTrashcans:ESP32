@@ -8,8 +8,8 @@
 WiFiUDP Udp;  // A UDP instance to let us send and receive packets over UDP
 
 // Network settings
-const char* ssid = "KE25";           // Your network SSID (name)
-const char* password = "MeltingIce2011"; // Your network password
+const char* ssid = "SSID";           // Your network SSID (name)
+const char* password = "PASSWORD"; // Your network password
 const unsigned int localPort = 8888; // Local port to listen for OSC packets
 
 // Angry setup
